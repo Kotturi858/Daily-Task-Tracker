@@ -9,7 +9,7 @@ import { TaskService } from '../../services/task.service';
 import { ToastrService } from 'ngx-toastr';
 import { Task } from '../../models/interface';
 import { CommonService } from '../../services/common.service';
-import { finalize } from 'rxjs';
+import { exhaustMap, finalize, Subject } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 
 @Component({
@@ -358,12 +358,23 @@ export class TaskListComponent implements OnInit {
     this.appendTasks(validTasks);
   }
 
+  private appendBulkTasksTrigger = new Subject<void>();
+  
   private appendTasks(tasks: { title: string; dueDate?: string }[]): void {
     this.commonService.isLoading.set(true);
-    
+    this.appendBulkTasksTrigger.next(); // trigger the pipeline
+  }
+
+  initApprendTasks(tasks: { title: string; dueDate?: string }[]): void {
     // Use the bulk import API instead of individual requests
-    this.taskService.importTasks(tasks)
-      .pipe(finalize(() => this.commonService.isLoading.set(false)))
+    this.appendBulkTasksTrigger
+      .pipe(
+        exhaustMap(() =>
+          this.taskService
+            .importTasks(tasks)
+            .pipe(finalize(() => this.commonService.isLoading.set(false)))
+        )
+      )
       .subscribe({
         next: (response) => {
           this.toastr.success(`Successfully imported ${response.imported} task${response.imported > 1 ? 's' : ''}!`);
